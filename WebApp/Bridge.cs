@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -7,28 +8,32 @@ using Windows.Data.Json;
 
 namespace RssHybrid
 {
+    public class BridgeParameters
+    {
+        public string Id { get; set; }
+        public string Method { get; set; }       
+        public Dictionary<string, string> Parameters { get; set; }
+    }
+
     class Bridge
     {
-        private Dictionary<string, Action<string>> actions;
+        private Dictionary<string, Action<BridgeParameters>> actions;
 
         public Bridge()
         {
-            actions = new Dictionary<string, Action<string>>();
+            actions = new Dictionary<string, Action<BridgeParameters>>();
         }
 
-        public void AddAction(string method, Action<string> action)
+        public void AddAction(string method, Action<BridgeParameters> action)
         {
             actions.Add(method, action);
         }
 
         public void Call(string value)
-        {
-            JsonObject result = JsonValue.Parse(value).GetObject();
-
-            string id = result.GetNamedString("id");
-            string method = result.GetNamedString("method");
-
-            actions[method].Invoke(id);
+        {            
+            var result = JsonConvert.DeserializeObject<BridgeParameters>(value);
+            
+            actions[result.Method].Invoke(result);
         }
     }
 }

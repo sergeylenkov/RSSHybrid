@@ -11,7 +11,7 @@
             let id = `call_${this.callbackId}`;
             this.callbacks[id] = resolve;
 
-            window.external.notify(JSON.stringify({ id: id, method: method, params: params }));
+            window.external.notify(JSON.stringify({ id: id, method: method, parameters: params }));
         });
     }
 

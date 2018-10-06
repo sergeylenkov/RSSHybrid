@@ -3,7 +3,7 @@
   <Identity Name="7061259a-4f29-47ef-8b10-a7b75ace0c2f" Publisher="CN=Sergey" Version="1.0.0.0" />
   <mp:PhoneIdentity PhoneProductId="7061259a-4f29-47ef-8b10-a7b75ace0c2f" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
-    <DisplayName>WebApp</DisplayName>
+    <DisplayName>RSSHybrid</DisplayName>
     <PublisherDisplayName>Sergey</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -14,8 +14,8 @@
     <Resource Language="x-generate" />
   </Resources>
   <Applications>
-    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="WebApp.App">
-      <uap:VisualElements DisplayName="WebApp" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" Description="WebApp" BackgroundColor="transparent">
+    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="RSSHybrid.App">
+      <uap:VisualElements DisplayName="RSS Hybrid" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" Description="RSS Hybrid" BackgroundColor="transparent">
         <uap:LockScreen Notification="badge" BadgeLogo="Assets\BadgeLogo.png" />
         <uap:DefaultTile>
           <uap:ShowNameOnTiles>
@@ -25,7 +25,6 @@
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
       <uap:ApplicationContentUriRules>
-        <uap:Rule Match="ms-appx-web:///Web/App.html" Type="include" WindowsRuntimeAccess="all" />
         <uap:Rule Match="ms-appx-web:///Web/index.html" Type="include" WindowsRuntimeAccess="all" />
       </uap:ApplicationContentUriRules>
     </Application>

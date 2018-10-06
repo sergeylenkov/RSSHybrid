@@ -34,7 +34,8 @@ namespace RssHybrid
 
             bridge = new Bridge();
 
-            bridge.AddAction("getFeeds", (id) => GetFeedsAction(id));
+            bridge.AddAction("getFeeds", (brigeParams) => GetFeedsAction(brigeParams));
+            bridge.AddAction("getAllNews", (brigeParams) => GetAllNewsAction(brigeParams));
 
             db = new SQLiteConnection("Data Source=Assets/database.sqlite;Version=3;");
             db.Open();
@@ -62,10 +63,19 @@ namespace RssHybrid
             string returnValue = await webView.InvokeScriptAsync("_bridgeCallback", args);
         }
 
-        private void GetFeedsAction(string id)
+        private void GetFeedsAction(BridgeParameters brigeParams)
         {
             string data = GetFeeds();
-            BridgeCallback(id, data);
+            BridgeCallback(brigeParams.Id, data);
+        }
+
+        private void GetAllNewsAction(BridgeParameters brigeParams)
+        {
+            int offset = Int32.Parse(brigeParams.Parameters["from"]);
+            int limit = Int32.Parse(brigeParams.Parameters["to"]);
+
+            string data = GetAllNews(offset, limit);
+            BridgeCallback(brigeParams.Id, data);
         }
 
         private string GetFeeds()
@@ -78,6 +88,25 @@ namespace RssHybrid
             var r = Serialize(reader);
             string json = JsonConvert.SerializeObject(r, Formatting.Indented);
           
+            return json;
+        }
+
+        private string GetAllNews(int offset, int limit)
+        {
+            string sql = "SELECT * FROM entries ORDER BY id DESC LIMIT @limit OFFSET @offset";
+            SQLiteCommand command = new SQLiteCommand(sql, db);
+
+            var limitParam = new SQLiteParameter("@limit", limit);
+            var offsetParam = new SQLiteParameter("@offset", offset);
+
+            command.Parameters.Add(limitParam);
+            command.Parameters.Add(offsetParam);
+
+            SQLiteDataReader reader = command.ExecuteReader();
+
+            var r = Serialize(reader);
+            string json = JsonConvert.SerializeObject(r, Formatting.Indented);
+
             return json;
         }
 
