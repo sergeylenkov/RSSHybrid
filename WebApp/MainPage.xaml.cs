@@ -17,6 +17,8 @@ using Windows.UI.Xaml.Navigation;
 using Windows.Data.Json;
 using System.Data.SQLite;
 using Newtonsoft.Json;
+using CodeHollow.FeedReader;
+using Windows.Storage;
 
 namespace RssHybrid
 {
@@ -36,8 +38,13 @@ namespace RssHybrid
 
             bridge.AddAction("getFeeds", (brigeParams) => GetFeedsAction(brigeParams));
             bridge.AddAction("getAllNews", (brigeParams) => GetAllNewsAction(brigeParams));
+            bridge.AddAction("getNews", (brigeParams) => GetNewsAction(brigeParams));
+            bridge.AddAction("getTotalCount", (brigeParams) => GetTotalCountAction(brigeParams));
 
-            db = new SQLiteConnection("Data Source=Assets/database.sqlite;Version=3;");
+            string path = ApplicationData.Current.LocalFolder.Path + "\\database.sqlite";
+            CopyDatabase(path);
+
+            db = new SQLiteConnection("Data Source=" + path + ";Version=3;");
             db.Open();
 
             webView.NavigationStarting += NavigationStarting;
@@ -67,7 +74,7 @@ namespace RssHybrid
         {
             string data = GetFeeds();
             BridgeCallback(brigeParams.Id, data);
-        }
+        }        
 
         private void GetAllNewsAction(BridgeParameters brigeParams)
         {
@@ -75,6 +82,19 @@ namespace RssHybrid
             int limit = Int32.Parse(brigeParams.Parameters["to"]);
 
             string data = GetAllNews(offset, limit);
+            BridgeCallback(brigeParams.Id, data);
+        }
+
+        private void GetNewsAction(BridgeParameters brigeParams)
+        {
+            UpdateFeeds();
+            string data = GetNews();
+            BridgeCallback(brigeParams.Id, data);
+        }
+
+        private void GetTotalCountAction(BridgeParameters brigeParams)
+        {
+            string data = GetTotalCount();
             BridgeCallback(brigeParams.Id, data);
         }
 
@@ -105,9 +125,72 @@ namespace RssHybrid
             SQLiteDataReader reader = command.ExecuteReader();
 
             var r = Serialize(reader);
-            string json = JsonConvert.SerializeObject(r, Formatting.Indented);
+            return JsonConvert.SerializeObject(r, Formatting.Indented);
+        }
 
-            return json;
+        private void UpdateFeeds()
+        {
+            string sql = "SELECT id, rss FROM feeds";
+            SQLiteCommand command = new SQLiteCommand(sql, db);
+
+            SQLiteDataReader reader = command.ExecuteReader();
+
+            while (reader.Read())
+            {
+                var task = FeedReader.ReadAsync(reader.GetString(1));
+                task.ConfigureAwait(false);
+
+                var feedId = reader.GetInt32(0);
+
+                foreach (var item in task.Result.Items)
+                {
+                    string existsSql = "SELECT id FROM entries WHERE feed_id = @feedId AND guid = @guid";
+                    SQLiteCommand existsCommand = new SQLiteCommand(existsSql, db);
+
+                    var feedParam = new SQLiteParameter("@feedId", feedId);
+                    var guidParam = new SQLiteParameter("@guid", item.Id);
+
+                    existsCommand.Parameters.Add(feedParam);
+                    existsCommand.Parameters.Add(guidParam);
+
+                    if (existsCommand.ExecuteScalar() == null)
+                    {
+                        string insertSql = "INSERT INTO entries(feed_id, guid, link, title, description, read, viewed, favorite, date) VALUES(@feedId, @guid, @link, @title, @description, @read, @viewed, @favorite, @date)";
+                        SQLiteCommand insertCommand = new SQLiteCommand(insertSql, db);
+
+                        insertCommand.Parameters.Add(new SQLiteParameter("@feedId", feedId));
+                        insertCommand.Parameters.Add(new SQLiteParameter("@guid", item.Id));
+                        insertCommand.Parameters.Add(new SQLiteParameter("@link", item.Link));
+                        insertCommand.Parameters.Add(new SQLiteParameter("@title", item.Title));
+                        insertCommand.Parameters.Add(new SQLiteParameter("@description", item.Description));
+                        insertCommand.Parameters.Add(new SQLiteParameter("@read", false));
+                        insertCommand.Parameters.Add(new SQLiteParameter("@viewed", false));
+                        insertCommand.Parameters.Add(new SQLiteParameter("@favorite", false));
+                        insertCommand.Parameters.Add(new SQLiteParameter("@date", item.PublishingDate));
+
+                        insertCommand.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
+
+        private string GetNews()
+        {
+            string sql = "SELECT* FROM entries WHERE viewed = 0 ORDER BY id DESC";
+            SQLiteCommand command = new SQLiteCommand(sql, db);
+
+            SQLiteDataReader reader = command.ExecuteReader();
+
+            var r = Serialize(reader);
+            return JsonConvert.SerializeObject(r, Formatting.Indented);
+        }
+
+        private string GetTotalCount()
+        {
+            string sql = "SELECT COUNT(*) FROM entries";
+            SQLiteCommand command = new SQLiteCommand(sql, db);
+
+            return command.ExecuteScalar().ToString();
         }
 
         public IEnumerable<Dictionary<string, object>> Serialize(SQLiteDataReader reader)
@@ -138,6 +221,15 @@ namespace RssHybrid
             }
 
             return result;
+        }
+
+        private async void CopyDatabase(string path)
+        {
+            if (!File.Exists(path))
+            {
+                StorageFile file = await StorageFile.GetFileFromApplicationUriAsync(new Uri("ms-appx:///Assets/database.sqlite"));
+                await file.CopyAsync(ApplicationData.Current.LocalFolder, "database.sqlite");
+            }
         }
     }
 }

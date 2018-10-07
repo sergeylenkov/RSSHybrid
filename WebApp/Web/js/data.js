@@ -2,12 +2,19 @@ const apiUrl = 'api.php?';
 const native = true;
 
 function getNews() {
-	return new Promise((resolve) => {
-		fetch(`${apiUrl}action=new`).then((response) => {				 
-			return response.json();
-		}).then((data) => {
-			resolve(data);
-		});
+    return new Promise((resolve) => {
+        if (native) {
+            bridge.call('getNews').then((result) => {
+                let data = JSON.parse(result);
+                resolve(data);
+            });
+        } else {
+            fetch(`${apiUrl}action=new`).then((response) => {
+                return response.json();
+            }).then((data) => {
+                resolve(data);
+            });
+        }
 	});
 }
 
@@ -73,4 +80,21 @@ function markAsRead(id) {
 			resolve(data);
 		});
 	});
+}
+
+function getTotalCount() {
+    return new Promise((resolve) => {
+        if (native) {
+            bridge.call('getTotalCount').then((result) => {
+                let data = JSON.parse(result);
+                resolve(data);
+            });
+        } else {
+            fetch(`${apiUrl}action=total`).then((response) => {
+                return response.json();
+            }).then((data) => {
+                resolve(data);
+            });
+        }
+    });
 }

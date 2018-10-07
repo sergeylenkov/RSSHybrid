@@ -1,4 +1,5 @@
 var startCount = 0;
+var totalCount = 0;
 
 var feeds = [];
 var entries = [];
@@ -253,18 +254,12 @@ function updateNews() {
 	getNews().then((data) => {
 		console.log(data);
 		reloadButton.classList.remove('active');
-
-		data.items.sort((a, b) => {
-			return b.id - a.id;
-		});
-
-		entryItems = [];
 		
-		updateMenu(data.channels);
-		fillNews(data.items);
+		fillNews(data);
+		updateEntriesCount();
 
-		if (data.items.length < parseInt(data.total)) {
-			startCount = data.items.length;
+		if (data.length < totalCount) {
+			startCount = data.length;
 			readMoreButton.classList.remove('hidden');
 		}
 	});
@@ -402,20 +397,17 @@ function init() {
 	readMoreButton.classList.add('hidden');
 	feedAddForm.classList.add('hidden');
 
-    getFeeds().then((data) => {
-        console.log(data);
+	getFeeds().then((data) => {
 		updateMenu(data);
+	});	
 
-		var total = 0;
-
-		data.forEach((channel) => {
-			total = total + channel.total;
-		});
-
-		if (total > 0) {
+	getTotalCount().then((count) => {
+		totalCount = parseInt(count);
+		console.log(totalCount);
+		if (totalCount > 0) {
 			readMoreButton.classList.remove('hidden');
 		}
-	});	
+	});
 
 	window.addEventListener('scroll', function(e) {
 		if (window.scrollY > 120) {
