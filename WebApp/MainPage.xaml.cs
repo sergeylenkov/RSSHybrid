@@ -19,6 +19,7 @@ using System.Data.SQLite;
 using Newtonsoft.Json;
 using CodeHollow.FeedReader;
 using Windows.Storage;
+using System.Threading.Tasks;
 
 namespace RssHybrid
 {
@@ -60,12 +61,13 @@ namespace RssHybrid
 
         private void ScriptNotify(object sender, NotifyEventArgs e)
         {
-            Debug.WriteLine(e.Value.ToString());
+            //Debug.WriteLine(e.Value.ToString());
             bridge.Call(e.Value.ToString());
         }
 
         private async void BridgeCallback(string id, string data)
         {
+            Debug.WriteLine("BridgeCallback {0}", id);
             string[] args = { id, data };
             string returnValue = await webView.InvokeScriptAsync("_bridgeCallback", args);
         }
@@ -85,10 +87,10 @@ namespace RssHybrid
             BridgeCallback(brigeParams.Id, data);
         }
 
-        private void GetNewsAction(BridgeParameters brigeParams)
+        private async void GetNewsAction(BridgeParameters brigeParams)
         {
-            UpdateFeeds();
-            string data = GetNews();
+            string data = await UpdateFeeds();            
+            Debug.WriteLine("GetNewsAction end");
             BridgeCallback(brigeParams.Id, data);
         }
 
@@ -106,9 +108,7 @@ namespace RssHybrid
             SQLiteDataReader reader = command.ExecuteReader();
             
             var r = Serialize(reader);
-            string json = JsonConvert.SerializeObject(r, Formatting.Indented);
-          
-            return json;
+            return JsonConvert.SerializeObject(r, Formatting.Indented);
         }
 
         private string GetAllNews(int offset, int limit)
@@ -128,56 +128,65 @@ namespace RssHybrid
             return JsonConvert.SerializeObject(r, Formatting.Indented);
         }
 
-        private void UpdateFeeds()
+        private async Task<string> UpdateFeeds()
         {
-            string sql = "SELECT id, rss FROM feeds";
-            SQLiteCommand command = new SQLiteCommand(sql, db);
+            await Task.Run(() => {
+                string updateSql = "UPDATE entries SET viewed = @viewed";
+                SQLiteCommand updateCommand = new SQLiteCommand(updateSql, db);
 
-            SQLiteDataReader reader = command.ExecuteReader();
+                updateCommand.Parameters.Add(new SQLiteParameter("@viewed", true));
 
-            while (reader.Read())
-            {
-                var task = FeedReader.ReadAsync(reader.GetString(1));
-                task.ConfigureAwait(false);
+                updateCommand.ExecuteScalar();
 
-                var feedId = reader.GetInt32(0);
+                string sql = "SELECT id, rss FROM feeds";
+                SQLiteCommand command = new SQLiteCommand(sql, db);
 
-                foreach (var item in task.Result.Items)
+                SQLiteDataReader reader = command.ExecuteReader();
+
+                while (reader.Read())
                 {
-                    string existsSql = "SELECT id FROM entries WHERE feed_id = @feedId AND guid = @guid";
-                    SQLiteCommand existsCommand = new SQLiteCommand(existsSql, db);
+                    var task = FeedReader.ReadAsync(reader.GetString(1));
 
-                    var feedParam = new SQLiteParameter("@feedId", feedId);
-                    var guidParam = new SQLiteParameter("@guid", item.Id);
-
-                    existsCommand.Parameters.Add(feedParam);
-                    existsCommand.Parameters.Add(guidParam);
-
-                    if (existsCommand.ExecuteScalar() == null)
+                    var feedId = reader.GetInt32(0);
+                    Debug.WriteLine("Parse feed {0}", feedId);
+                    foreach (var item in task.Result.Items)
                     {
-                        string insertSql = "INSERT INTO entries(feed_id, guid, link, title, description, read, viewed, favorite, date) VALUES(@feedId, @guid, @link, @title, @description, @read, @viewed, @favorite, @date)";
-                        SQLiteCommand insertCommand = new SQLiteCommand(insertSql, db);
+                        string existsSql = "SELECT id FROM entries WHERE feed_id = @feedId AND guid = @guid";
+                        SQLiteCommand existsCommand = new SQLiteCommand(existsSql, db);
 
-                        insertCommand.Parameters.Add(new SQLiteParameter("@feedId", feedId));
-                        insertCommand.Parameters.Add(new SQLiteParameter("@guid", item.Id));
-                        insertCommand.Parameters.Add(new SQLiteParameter("@link", item.Link));
-                        insertCommand.Parameters.Add(new SQLiteParameter("@title", item.Title));
-                        insertCommand.Parameters.Add(new SQLiteParameter("@description", item.Description));
-                        insertCommand.Parameters.Add(new SQLiteParameter("@read", false));
-                        insertCommand.Parameters.Add(new SQLiteParameter("@viewed", false));
-                        insertCommand.Parameters.Add(new SQLiteParameter("@favorite", false));
-                        insertCommand.Parameters.Add(new SQLiteParameter("@date", item.PublishingDate));
+                        existsCommand.Parameters.Add(new SQLiteParameter("@feedId", feedId));
+                        existsCommand.Parameters.Add(new SQLiteParameter("@guid", item.Id));
 
-                        insertCommand.ExecuteNonQuery();
+                        if (existsCommand.ExecuteScalar() == null)
+                        {
+                            string insertSql = "INSERT INTO entries(feed_id, guid, link, title, description, read, viewed, favorite, date) VALUES(@feedId, @guid, @link, @title, @description, @read, @viewed, @favorite, @date)";
+                            SQLiteCommand insertCommand = new SQLiteCommand(insertSql, db);
+
+                            insertCommand.Parameters.Add(new SQLiteParameter("@feedId", feedId));
+                            insertCommand.Parameters.Add(new SQLiteParameter("@guid", item.Id));
+                            insertCommand.Parameters.Add(new SQLiteParameter("@link", item.Link));
+                            insertCommand.Parameters.Add(new SQLiteParameter("@title", item.Title));
+                            insertCommand.Parameters.Add(new SQLiteParameter("@description", item.Description));
+                            insertCommand.Parameters.Add(new SQLiteParameter("@read", false));
+                            insertCommand.Parameters.Add(new SQLiteParameter("@viewed", false));
+                            insertCommand.Parameters.Add(new SQLiteParameter("@favorite", false));
+                            insertCommand.Parameters.Add(new SQLiteParameter("@date", item.PublishingDate));
+
+                            insertCommand.ExecuteNonQuery();
+                        }
                     }
                 }
-            }
+            });            
+
+            return GetNews();
         }
 
         private string GetNews()
         {
-            string sql = "SELECT* FROM entries WHERE viewed = 0 ORDER BY id DESC";
+            string sql = "SELECT * FROM entries WHERE viewed = @viewed ORDER BY id DESC LIMIT 30";
+
             SQLiteCommand command = new SQLiteCommand(sql, db);
+            command.Parameters.Add(new SQLiteParameter("@viewed", true));
 
             SQLiteDataReader reader = command.ExecuteReader();
 
