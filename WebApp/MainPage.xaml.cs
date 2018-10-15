@@ -20,6 +20,8 @@ using Newtonsoft.Json;
 using CodeHollow.FeedReader;
 using Windows.Storage;
 using System.Threading.Tasks;
+using Windows.UI.Core;
+using System.Data;
 
 namespace RssHybrid
 {
@@ -52,11 +54,18 @@ namespace RssHybrid
             webView.ScriptNotify += ScriptNotify;
 
             webView.Navigate(new Uri(@"ms-appx-web:///Web/index.html"));
+
+            SystemNavigationManager.GetForCurrentView().BackRequested += GoBack;
         }
 
         private void NavigationStarting(WebView sender, WebViewNavigationStartingEventArgs args)
         {
-            Debug.WriteLine(args.Uri.ToString());            
+            Debug.WriteLine(args.Uri.ToString());
+
+            if (args.Uri.ToString() != "ms-appx-web:///Web/index.html")
+            {
+                ShowBackButton();
+            }
         }
 
         private void ScriptNotify(object sender, NotifyEventArgs e)
@@ -67,7 +76,7 @@ namespace RssHybrid
 
         private async void BridgeCallback(string id, string data)
         {
-            Debug.WriteLine("BridgeCallback {0}", id);
+            Debug.WriteLine("BridgeCallback {0}", (object)id);
             string[] args = { id, data };
             string returnValue = await webView.InvokeScriptAsync("_bridgeCallback", args);
         }
@@ -89,8 +98,7 @@ namespace RssHybrid
 
         private async void GetNewsAction(BridgeParameters brigeParams)
         {
-            string data = await UpdateFeeds();            
-            Debug.WriteLine("GetNewsAction end");
+            string data = await UpdateFeeds();
             BridgeCallback(brigeParams.Id, data);
         }
 
@@ -135,35 +143,49 @@ namespace RssHybrid
                 SQLiteCommand updateCommand = new SQLiteCommand(updateSql, db);
 
                 updateCommand.Parameters.Add(new SQLiteParameter("@viewed", true));
-
-                updateCommand.ExecuteScalar();
+                updateCommand.ExecuteNonQuery();
 
                 string sql = "SELECT id, rss FROM feeds";
                 SQLiteCommand command = new SQLiteCommand(sql, db);
 
                 SQLiteDataReader reader = command.ExecuteReader();
 
+                string existsSql = "SELECT id FROM entries WHERE feed_id = @feedId AND guid = @guid";
+                SQLiteCommand existsCommand = new SQLiteCommand(existsSql, db);
+
+                existsCommand.Parameters.Add("@feedId", DbType.Int32);
+                existsCommand.Parameters.Add("@guid", DbType.String);
+
                 while (reader.Read())
                 {
+                    var feedId = reader.GetInt32(0);                    
                     var task = FeedReader.ReadAsync(reader.GetString(1));
-
-                    var feedId = reader.GetInt32(0);
-                    Debug.WriteLine("Parse feed {0}", feedId);
+                    
                     foreach (var item in task.Result.Items)
                     {
-                        string existsSql = "SELECT id FROM entries WHERE feed_id = @feedId AND guid = @guid";
-                        SQLiteCommand existsCommand = new SQLiteCommand(existsSql, db);
+                        string itemId = "";
 
-                        existsCommand.Parameters.Add(new SQLiteParameter("@feedId", feedId));
-                        existsCommand.Parameters.Add(new SQLiteParameter("@guid", item.Id));
-
-                        if (existsCommand.ExecuteScalar() == null)
+                        if (item.Id != null)
                         {
+                            itemId = item.Id;
+                        } else
+                        {
+                            itemId = item.Link;
+                        }
+
+                        existsCommand.Parameters["@feedId"].Value = feedId;
+                        existsCommand.Parameters["@guid"].Value = itemId;
+
+                        var column = existsCommand.ExecuteScalar();
+
+                        if (column == null)
+                        {
+                            Debug.WriteLine("Insert new {0}", (object)itemId);
                             string insertSql = "INSERT INTO entries(feed_id, guid, link, title, description, read, viewed, favorite, date) VALUES(@feedId, @guid, @link, @title, @description, @read, @viewed, @favorite, @date)";
                             SQLiteCommand insertCommand = new SQLiteCommand(insertSql, db);
 
                             insertCommand.Parameters.Add(new SQLiteParameter("@feedId", feedId));
-                            insertCommand.Parameters.Add(new SQLiteParameter("@guid", item.Id));
+                            insertCommand.Parameters.Add(new SQLiteParameter("@guid", itemId));
                             insertCommand.Parameters.Add(new SQLiteParameter("@link", item.Link));
                             insertCommand.Parameters.Add(new SQLiteParameter("@title", item.Title));
                             insertCommand.Parameters.Add(new SQLiteParameter("@description", item.Description));
@@ -176,17 +198,17 @@ namespace RssHybrid
                         }
                     }
                 }
-            });            
-
+            });
+            
             return GetNews();
         }
 
         private string GetNews()
         {
-            string sql = "SELECT * FROM entries WHERE viewed = @viewed ORDER BY id DESC LIMIT 30";
+            string sql = "SELECT * FROM entries WHERE viewed = @viewed ORDER BY id DESC";
 
             SQLiteCommand command = new SQLiteCommand(sql, db);
-            command.Parameters.Add(new SQLiteParameter("@viewed", true));
+            command.Parameters.Add(new SQLiteParameter("@viewed", false));
 
             SQLiteDataReader reader = command.ExecuteReader();
 
@@ -239,6 +261,21 @@ namespace RssHybrid
                 StorageFile file = await StorageFile.GetFileFromApplicationUriAsync(new Uri("ms-appx:///Assets/database.sqlite"));
                 await file.CopyAsync(ApplicationData.Current.LocalFolder, "database.sqlite");
             }
+        }
+
+        private void ShowBackButton()
+        {
+            SystemNavigationManager.GetForCurrentView().AppViewBackButtonVisibility = AppViewBackButtonVisibility.Visible;
+        }
+
+        private void GoBack(object e, BackRequestedEventArgs args)
+        {
+            if (webView.CanGoBack)
+            {
+                webView.GoBack();
+            }
+
+            SystemNavigationManager.GetForCurrentView().AppViewBackButtonVisibility = AppViewBackButtonVisibility.Collapsed;
         }
     }
 }
