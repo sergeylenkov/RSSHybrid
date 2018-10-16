@@ -1,4 +1,5 @@
-﻿using System;
+﻿using RSSHybrid;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -30,6 +31,8 @@ namespace RssHybrid
         {
             this.InitializeComponent();
             this.Suspending += OnSuspending;
+
+            DataAccess.InitializeDatabase();
         }
 
         /// <summary>

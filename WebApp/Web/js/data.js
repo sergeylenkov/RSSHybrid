@@ -4,7 +4,7 @@ const native = true;
 function getNews() {
     return new Promise((resolve) => {
         if (native) {
-            bridge.call('getNews').then((result) => {
+            bridge.call('updateFeeds').then((result) => {
                 let data = JSON.parse(result);
                 resolve(data);
             });
