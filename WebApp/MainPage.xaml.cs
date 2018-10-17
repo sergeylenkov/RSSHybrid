@@ -33,7 +33,9 @@ namespace RssHybrid
             webView.Navigate(new Uri(@"ms-appx-web:///Web/index.html"));
 
             SystemNavigationManager.GetForCurrentView().BackRequested += GoBack;
-        }
+
+            SetBadgeNumber(DataAccess.GetUnviewedCount())
+;        }
 
         private void NavigationStarting(WebView sender, WebViewNavigationStartingEventArgs args)
         {
