@@ -9,7 +9,7 @@ function getNews() {
                 resolve(data);
             });
         } else {
-            fetch(`${apiUrl}action=new`).then((response) => {
+            fetch(`${apiUrl}action=update`).then((response) => {
                 return response.json();
             }).then((data) => {
                 resolve(data);
@@ -79,6 +79,25 @@ function markAsRead(id) {
 		}).then((data) => {
 			resolve(data);
 		});
+	});
+}
+
+function markAsViewed(ids) {
+    return new Promise((resolve) => {
+        let idsParam = ids.join(',');
+
+        if (native) {
+            bridge.call('markAsViewed', { ids: idsParam }).then((result) => {
+                let data = JSON.parse(result);
+                resolve(data);
+            });
+        } else {
+            fetch(`${apiUrl}action=mark_as_viewed&ids=${idsParam}`).then((response) => {				 
+                return response.json();
+            }).then((data) => {
+                resolve(data);
+            });
+        }
 	});
 }
 

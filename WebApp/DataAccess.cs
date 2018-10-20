@@ -153,13 +153,7 @@ namespace RSSHybrid
                 using (SQLiteConnection db = new SQLiteConnection(GetConnectionString()))
                 {
                     db.Open();
-
-                    string updateSql = "UPDATE entries SET viewed = @viewed";
-                    SQLiteCommand updateCommand = new SQLiteCommand(updateSql, db);
-
-                    updateCommand.Parameters.Add(new SQLiteParameter("@viewed", true));
-                    updateCommand.ExecuteNonQuery();
-
+                    
                     string sql = "SELECT id, rss FROM feeds";
                     SQLiteCommand command = new SQLiteCommand(sql, db);
 
@@ -218,6 +212,22 @@ namespace RSSHybrid
                     db.Close();
                 }
             });
+        }
+
+        public static void MarkAsViewed(string ids)
+        {
+            using (SQLiteConnection db = new SQLiteConnection(GetConnectionString()))
+            {
+                db.Open();
+
+                string updateSql = String.Format("UPDATE entries SET viewed = @viewed WHERE id IN({0})", (object)ids);
+                SQLiteCommand updateCommand = new SQLiteCommand(updateSql, db);
+
+                updateCommand.Parameters.Add(new SQLiteParameter("@viewed", true));
+                updateCommand.ExecuteNonQuery();
+
+                db.Close();
+            }
         }
 
         public static IEnumerable<Dictionary<string, object>> Serialize(SQLiteDataReader reader)

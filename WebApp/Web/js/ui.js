@@ -16,6 +16,34 @@ var editFeedButton;
 var formLinkField;
 var formCloseButton;
 
+function debounce(func, wait, immediate) {
+	var timeout;
+	return function() {
+		var context = this, args = arguments;
+		var later = function() {
+			timeout = null;
+			if (!immediate) func.apply(context, args);
+		};
+		var callNow = immediate && !timeout;
+		clearTimeout(timeout);
+		timeout = setTimeout(later, wait);
+		if (callNow) func.apply(context, args);
+	};
+}
+
+function throttled(func, delay) {
+	let lastCall = 0;
+	return function (...args) {
+	  	const now = (new Date).getTime();
+	  	if (now - lastCall < delay) {
+			return;
+		}
+		  
+	  	lastCall = now;
+	  	return func(...args);
+	}
+}
+
 function fillNews(data) {
 	let content = document.getElementById('content');
 	content.innerHTML = '';
@@ -251,6 +279,9 @@ function editMenu() {
 function updateNews() {
 	reloadButton.classList.add('active');
 
+	entries = [];
+	entryItems = [];
+	
 	getNews().then((data) => {
 		console.log(data);
 		reloadButton.classList.remove('active');
@@ -262,6 +293,16 @@ function updateNews() {
 			startCount = data.length;
 			readMoreButton.classList.remove('hidden');
 		}
+
+		// set viewed first page on user action
+		setTimeout(() => {
+			let _updateViewed = () => {				
+				updateViewed(true);
+				window.removeEventListener('mousemove', _updateViewed);
+			}
+	
+			window.addEventListener('mousemove', _updateViewed);
+		}, 3000);		
 	});
 }
 
@@ -300,7 +341,7 @@ function getViewedNews() {
 
 	getAllNews(startCount, startCount + 30).then((data) => {
 		reloadButton.classList.remove('active');
-
+		console.log(data);
 		startCount = startCount + data.length;
 
 		let content = document.getElementById('content');
@@ -349,6 +390,55 @@ function getChannelById(id) {
 	});
 
 	return result;
+}
+
+function updateViewed(force) {
+	let ids = [];
+	console.log('updateViewed');
+	entryItems.forEach(entryItem => {
+		if (!parseInt(entryItem.entry.viewed)) {
+			let rect = entryItem.item.getBoundingClientRect();
+			let height = window.innerHeight / 2;
+
+			if (force) {
+				height = window.innerHeight;
+			}
+			if (rect.top < height) {
+				entryItem.entry.viewed = 1;
+				ids.push(entryItem.entry.id);
+			}
+		}
+	});
+
+	if (ids.length > 0) {
+		markAsViewed(ids);
+		updateViewedCount();
+	}
+}
+
+function updateViewedCount() {
+	menuItems.forEach(menuItem => {
+		let feed = menuItem.feed;
+		let item = menuItem.item;
+
+		let feedItems = entries.filter((entry) => {
+			if (entry.feed_id == feed.id && !parseInt(entry.viewed)) {
+				return true;
+			}
+
+			return false;
+		});
+
+		let count = feedItems.length;
+
+		item.counter.innerText = count;
+
+		if (count == 0) {
+			item.classList.add('empty');
+		} else {
+			item.classList.remove('empty');
+		}
+	});
 }
 
 function init() {
@@ -409,12 +499,23 @@ function init() {
 		}
 	});
 
-	window.addEventListener('scroll', function(e) {
-		if (window.scrollY > 120) {
+	let _updateViewed = throttled(() => {
+		updateViewed(false);
+	}, 500);
+
+	window.addEventListener('scroll', (e) => {
+		if (window.scrollY > 80) {
 			mainMenu.classList.add('fixed');
 		} else {
 			mainMenu.classList.remove('fixed');
 		}
+
+		if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight) {
+			this.console.log('scroll to end');
+			updateViewed(true);
+		} else {
+			_updateViewed(false);
+		}		
 	});
 }
 
