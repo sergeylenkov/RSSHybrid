@@ -27,6 +27,7 @@ namespace RssHybrid
             bridge.AddAction("updateFeeds", (brigeParams) => UpdateFeedsAction(brigeParams));
             bridge.AddAction("getTotalCount", (brigeParams) => GetTotalCountAction(brigeParams));
             bridge.AddAction("markAsViewed", (brigeParams) => MarkAsViewedAction(brigeParams));
+            bridge.AddAction("getUnviewed", (brigeParams) => GetUnviewedAction(brigeParams));
 
             webView.NavigationStarting += NavigationStarting;
             webView.ScriptNotify += ScriptNotify;
@@ -105,6 +106,12 @@ namespace RssHybrid
             DataAccess.MarkAsViewed(ids);
 
             SetBadgeNumber(DataAccess.GetUnviewedCount());
+        }
+
+        private void GetUnviewedAction(BridgeParameters brigeParams)
+        {
+            string data = DataAccess.GetUnviewedNews();
+            BridgeCallback(brigeParams.Id, data);
         }
 
         private void ShowBackButton()
