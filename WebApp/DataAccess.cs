@@ -1,5 +1,4 @@
-﻿using CodeHollow.FeedReader;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -7,6 +6,7 @@ using System.Data.SQLite;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Windows.Storage;
+using Windows.Web.Syndication;
 
 namespace RSSHybrid
 {
@@ -149,7 +149,7 @@ namespace RSSHybrid
 
         public static async Task UpdateFeeds()
         {
-            await Task.Run(() => {
+            await Task.Run(async () => {
                 using (SQLiteConnection db = new SQLiteConnection(GetConnectionString()))
                 {
                     db.Open();
@@ -168,47 +168,66 @@ namespace RSSHybrid
                     while (reader.Read())
                     {
                         var feedId = reader.GetInt32(0);
-                        var task = FeedReader.ReadAsync(reader.GetString(1));
+                        var feedUrl = reader.GetString(1);
 
-                        foreach (var item in task.Result.Items)
+                        var uri = new Uri(feedUrl);
+
+                        SyndicationClient client = new SyndicationClient();
+                        client.BypassCacheOnRetrieve = true;
+
+                        try
                         {
-                            string itemId = "";
+                            SyndicationFeed feed = await client.RetrieveFeedAsync(uri);
 
-                            if (item.Id != null)
+                            foreach (var item in feed.Items)
                             {
-                                itemId = item.Id;
-                            }
-                            else
-                            {
-                                itemId = item.Link;
-                            }
+                                string itemId = "";
+                                string itemLink = "";
 
-                            existsCommand.Parameters["@feedId"].Value = feedId;
-                            existsCommand.Parameters["@guid"].Value = itemId;
+                                if (item.Links != null)
+                                {
+                                    itemLink = item.Links[0].Uri.ToString();
+                                }
 
-                            var column = existsCommand.ExecuteScalar();
+                                if (item.Id.Length > 0)
+                                {
+                                    itemId = item.Id;
+                                }
+                                else
+                                {
+                                    itemId = itemLink;
+                                }
+                                
+                                existsCommand.Parameters["@feedId"].Value = feedId;
+                                existsCommand.Parameters["@guid"].Value = itemId;
 
-                            if (column == null)
-                            {
-                                Debug.WriteLine("Insert new {0}", (object)itemId);
-                                string insertSql = "INSERT INTO entries(feed_id, guid, link, title, description, read, viewed, favorite, date) VALUES(@feedId, @guid, @link, @title, @description, @read, @viewed, @favorite, @date)";
-                                SQLiteCommand insertCommand = new SQLiteCommand(insertSql, db);
+                                var column = existsCommand.ExecuteScalar();
 
-                                insertCommand.Parameters.Add(new SQLiteParameter("@feedId", feedId));
-                                insertCommand.Parameters.Add(new SQLiteParameter("@guid", itemId));
-                                insertCommand.Parameters.Add(new SQLiteParameter("@link", item.Link));
-                                insertCommand.Parameters.Add(new SQLiteParameter("@title", item.Title));
-                                insertCommand.Parameters.Add(new SQLiteParameter("@description", item.Description));
-                                insertCommand.Parameters.Add(new SQLiteParameter("@read", false));
-                                insertCommand.Parameters.Add(new SQLiteParameter("@viewed", false));
-                                insertCommand.Parameters.Add(new SQLiteParameter("@favorite", false));
-                                insertCommand.Parameters.Add(new SQLiteParameter("@date", item.PublishingDate));
+                                if (column == null)
+                                {
+                                    Debug.WriteLine("Insert new {0}", (object)itemId);
+                                    string insertSql = "INSERT INTO entries(feed_id, guid, link, title, description, read, viewed, favorite, date) VALUES(@feedId, @guid, @link, @title, @description, @read, @viewed, @favorite, @date)";
+                                    SQLiteCommand insertCommand = new SQLiteCommand(insertSql, db);
 
-                                insertCommand.ExecuteNonQuery();
+                                    insertCommand.Parameters.Add(new SQLiteParameter("@feedId", feedId));
+                                    insertCommand.Parameters.Add(new SQLiteParameter("@guid", itemId));
+                                    insertCommand.Parameters.Add(new SQLiteParameter("@link", itemLink));
+                                    insertCommand.Parameters.Add(new SQLiteParameter("@title", item.Title.Text));
+                                    insertCommand.Parameters.Add(new SQLiteParameter("@description", item.Summary.Text));
+                                    insertCommand.Parameters.Add(new SQLiteParameter("@read", false));
+                                    insertCommand.Parameters.Add(new SQLiteParameter("@viewed", false));
+                                    insertCommand.Parameters.Add(new SQLiteParameter("@favorite", false));
+                                    insertCommand.Parameters.Add(new SQLiteParameter("@date", item.PublishedDate));
+
+                                    insertCommand.ExecuteNonQuery();
+                                }
                             }
                         }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine(ex.ToString());
+                        }
                     }
-
                     db.Close();
                 }
             });
