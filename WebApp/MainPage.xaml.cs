@@ -36,8 +36,9 @@ namespace RssHybrid
 
             SystemNavigationManager.GetForCurrentView().BackRequested += GoBack;
 
-            SetBadgeNumber(DataAccess.GetUnviewedCount())
-;        }
+            SetBadgeNumber(DataAccess.GetUnviewedCount());
+            UpdateTile("", "");
+;       }
 
         private void NavigationStarting(WebView sender, WebViewNavigationStartingEventArgs args)
         {
@@ -87,6 +88,9 @@ namespace RssHybrid
             if (count > 0)
             {
                 ShowNotification(count);
+
+                var entry = DataAccess.GetLastUnviewedEntry();
+                UpdateTile(entry["feed"], entry["title"]);
             }
 
             SetBadgeNumber(count);
@@ -172,6 +176,68 @@ namespace RssHybrid
             
             BadgeUpdater badgeUpdater = BadgeUpdateManager.CreateBadgeUpdaterForApplication();
             badgeUpdater.Update(badge);
+        }
+
+        private void UpdateTile(string feed, string title)
+        {
+            if (feed.Length == 0)
+            {
+                TileUpdateManager.CreateTileUpdaterForApplication().Clear();
+                return;
+            }
+
+            TileContent content = new TileContent()
+            {
+                Visual = new TileVisual()
+                {
+                    TileMedium = new TileBinding()
+                    {
+                        Content = new TileBindingContentAdaptive()
+                        {
+                            Children =
+                            {
+                                new AdaptiveText()
+                                {
+                                    Text = feed,
+                                    HintStyle = AdaptiveTextStyle.Caption
+                                },
+
+                                new AdaptiveText()
+                                {
+                                    Text = title,
+                                    HintStyle = AdaptiveTextStyle.CaptionSubtle,
+                                    HintWrap = true
+                                }
+                            }
+                        }
+                    },
+
+                    TileWide = new TileBinding()
+                    {
+                        Content = new TileBindingContentAdaptive()
+                        {
+                            Children =
+                            {
+                                new AdaptiveText()
+                                {
+                                    Text = feed,
+                                    HintStyle = AdaptiveTextStyle.Caption
+                                },
+
+                                new AdaptiveText()
+                                {
+                                    Text = title,
+                                    HintStyle = AdaptiveTextStyle.CaptionSubtle,
+                                    HintWrap = true
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            var notification = new TileNotification(content.GetXml());
+            TileUpdateManager.CreateTileUpdaterForApplication().Update(notification);
         }
     }
 }

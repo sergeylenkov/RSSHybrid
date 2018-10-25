@@ -228,6 +228,7 @@ namespace RSSHybrid
                             Debug.WriteLine(ex.ToString());
                         }
                     }
+
                     db.Close();
                 }
             });
@@ -247,6 +248,36 @@ namespace RSSHybrid
 
                 db.Close();
             }
+        }
+
+        public static Dictionary<string, string> GetLastUnviewedEntry()
+        {
+            var result = new Dictionary<string, string>();
+
+            result.Add("feed", "");
+            result.Add("title", "");
+            result.Add("description", "");
+
+            using (SQLiteConnection db = new SQLiteConnection(GetConnectionString()))
+            {
+                db.Open();
+
+                string sql = "SELECT f.title, e.title, e.description FROM entries e, feeds f WHERE e.viewed = 0 AND e.feed_id = f.id ORDER BY e.id DESC LIMIT 1";
+                SQLiteCommand command = new SQLiteCommand(sql, db);
+
+                SQLiteDataReader reader = command.ExecuteReader();
+
+                while (reader.Read())
+                {
+                    result["feed"] = reader.GetString(0);
+                    result["title"] = reader.GetString(1);
+                    result["description"] = reader.GetString(2);
+                }
+
+                db.Close();
+            }
+
+            return result;
         }
 
         public static IEnumerable<Dictionary<string, object>> Serialize(SQLiteDataReader reader)
